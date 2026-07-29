@@ -1,79 +1,85 @@
 # This workflow will build a Java project with Maven, and cache/restore any dependencies to improve execution time
 # For more info see: https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-java-with-maven
- 
+
 name: Java CI/CD Pipeline with Maven
- 
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
- 
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         java: [ '17' ]
- 
+
     steps:
       - uses: actions/checkout@v4
- 
+
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.java }}
           distribution: 'adopt'
           cache: maven
- 
+
       - name: Grant execute permission for Maven wrapper
         run: chmod +x mvnw
- 
+
       - name: Build and test with Maven Wrapper
         run: ./mvnw clean verify -U -Dmaven.wagon.http.retryHandler.count=5
- 
-      - name: Build and analyze
+
+      - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Spring-PetClinic -Dsonar.projectName='Spring-PetClinic'
- 
-      # This step is optional but shows how you might create an artifact to be used later
+        run: |
+          ./mvnw sonar:sonar \
+            -Dsonar.projectKey=Spring-PetClinic \
+            -Dsonar.projectName=Spring-PetClinic \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.token=$SONAR_TOKEN
+
       - name: Archive production jar
         uses: actions/upload-artifact@v4
         with:
           name: spring-petclinic-jar
           path: target/spring-petclinic-*.jar
- 
+
+
   deploy:
     runs-on: ubuntu-latest
     needs: [ build ]
- 
+
     steps:
       - name: Check out code
         uses: actions/checkout@v4
- 
+
       - name: Download Jar from CI
         uses: actions/download-artifact@v4
         with:
           name: spring-petclinic-jar
           path: target
- 
+
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
- 
+
       - name: Remove any existing app (Kill process on port 8080 on remote host)
         run: ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} "fuser -k 8080/tcp || true"
- 
+
       - name: Copy JAR to EC2
         run: scp -o StrictHostKeyChecking=no target/spring-petclinic-*.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/
- 
+
       - name: Ensure Java is installed on remote
         run: ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
           "sudo apt update && sudo apt install -y openjdk-17-jre"
- 
+
       - name: Start Spring PetClinic
         run: ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} \
           "nohup java -jar /home/ubuntu/spring-petclinic-*.jar > /dev/null 2>&1 &"
