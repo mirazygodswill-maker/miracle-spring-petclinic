@@ -41,8 +41,8 @@ jobs:
         run: |
           ./mvnw -B verify \
             org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey=Spring-PetClinic \
-            -Dsonar.projectName=Spring-PetClinic \
+            -Dsonar.projectKey=miracle-spring-petclinic \
+            -Dsonar.projectName=miracle-spring-Petclinic \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.token=$SONAR_TOKEN \
             -Dsonar.java.binaries=target/classes
